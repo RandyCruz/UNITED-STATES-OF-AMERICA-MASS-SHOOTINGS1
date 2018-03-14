@@ -1,0 +1,205 @@
+---
+title: "Cruz_MA712_HW6_US_SHOOTINGS"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(Zelig)
+library(texreg)
+library(mvtnorm)
+library(radiant.data)
+library(sjmisc)
+library(lattice)
+library(dplyr)
+```
+#DATA On US MASS SHOOTINGS
+```{r}
+library(radiant.data)
+library(readr)
+  usguns <- read_csv("/Users/racruz/Desktop/US_Mass_Shooting_Dataset.csv", col_names = TRUE)
+ head(usguns)
+```
+
+#Cleaning Data
+```{r}
+usguns1<-na.omit(usguns)
+head(usguns1)
+```
+#Changing my DV into integer Var
+```{r}
+usguns1 <- usguns1%>% 
+  mutate(mental_hi = as.factor(Mental_Health_Issues),
+         Gender = as.factor(Gender),
+         Race = as.factor(Race))
+```
+#Using the Mental Health Issues Var in the orginal data I made a new variable (mental_hi) which takes the 1 if there was a mental health issue and 0 if there was no mental health issue
+```{r}
+usguns1 <- usguns1%>%
+  mutate(mental_hi= ifelse(Mental_Health_Issues =="Yes",1,0))
+
+head(usguns1)
+```
+#Filtering my dataset (usguns1)
+```{r}
+usguns1 %>% 
+  select(mental_hi, Fatalities, Injured, Victimtot, Gender, everything())
+head(usguns1)
+```
+#Regression Analysis
+The 
+```{r}
+nm0 <- lm(Fatalities ~ mental_hi + Gender + Race, family = binomial, data = usguns1)
+summary(nm0)
+visreg::visreg(nm0)
+```
+
+```{r}
+nm1 <- lm(Fatalities ~ mental_hi + Gender + Race, family = binomial, data = usguns1)
+summary(nm1)
+```
+#Regression Results
+The interpretation of this output suggests that there is a statistically significant relationship between number of fatalities and number of those who are injured.  Mental health issues contributes to (0.23) increase in fatalities and a (.011) increase in injuries when mental health is observed.
+```{r}
+nm2 <- lm(Fatalities ~ mental_hi*Injured + Gender + I(Fatalities^2), family = binomial, data = usguns1)
+summary(nm2)
+```
+
+#AIC X BIC
+Screen Used to simply interpret the data in R.
+
+As seen Model 2 best fits this data. We see that Model 2 has the lowest deviance levels with AIC and BIC lowest at Model 2.
+```{r}
+library(texreg)
+screenreg(list(nm0, nm1,nm2))
+```
+
+
+
+
+```{r}
+htmlreg(list(nm0, nm1, nm2))
+```
+
+
+#Factor Function
+Identifying if the IV's in this analysis are in fact factors
+
+```{r}
+(l <- sapply(usguns1, function(x) is.factor(x)))
+```
+
+
+
+
+#Zelig EV, PV , FD Interpretations
+
+
+
+```{r}
+zus.shoot <- zelig(Fatalities ~ mental_hi + Gender + Race, model = "normal", data = usguns1)
+zus.shoot
+```
+
+```{r}
+zus.set <- setx(zus.shoot, Fatalities = min(usguns1$Fatalities):max(usguns1$Fatalities))
+zus.sim <- sim(zus.shoot, zus.set)
+ci.plot(zus.sim)
+```
+
+```{r}
+zus.shoot1 <- zelig(Fatalities ~ mental_hi*Race + Gender, model = "normal", data = usguns1)
+summary(zus.shoot)
+```
+
+
+
+```{r}
+ftal.range = min(usguns1$Fatalities):max(usguns1$Fatalities)
+x <- setx(zus.shoot, Fatalities = ftal.range)
+s <- sim(zus.shoot, x = x)
+ci.plot(s)
+```
+
+
+
+
+
+```{r}
+x <- setx(zus.shoot, Gender = "Male")
+x1 <- setx(zus.shoot, Gender = "Female")
+s <- sim(zus.shoot, x = x, x1 = x1)
+summary(s)
+```
+
+
+```{r}
+fd <- s$get_qi(xvalue="x1", qi="fd")
+summary(fd)
+```
+
+```{r}
+graphics.off()
+ par("mar")
+ par(mar=c(1,1,1,1))
+ plot(s)
+```
+
+
+
+```{r}
+c1x <- setx(zus.shoot, Gender = "Male", Fatalities)
+c1x1 <- setx(zus.shoot, Gender = "Female", Fatalities)
+c1s <- sim(zus.shoot, x = c1x, x1 = c1x1)
+
+
+graphics.off()
+ par("mar")
+ par(mar=c(1,1,1,1))
+plot(c1s)
+```
+
+
+```{r}
+c2x <- setx(zus.shoot, mental_hi*Fatalities, Gender)
+c2s <- sim(zus.shoot, x = c2x)
+
+graphics.off()
+ par("mar")
+ par(mar=c(1,1,1,1))
+plot(c2s)
+```
+
+```{r}
+d1 <- c1s$get_qi(xvalue="x1", qi="fd")
+```
+
+```{r}
+dfd <- as.data.frame(cbind(d1))
+head(dfd)
+```
+
+```{r}
+library(tidyr)
+
+tidd <- dfd %>% 
+  gather(Gender, simv, 1:1)
+head(tidd)
+```
+
+```{r}
+library(dplyr)
+
+tidd %>% 
+  group_by(Gender) %>% 
+  summarise(mode = mode(simv), sd = sd(simv))
+```
+```{r}
+library(ggplot2)
+
+ggplot(tidd, aes(simv)) + geom_histogram() + facet_grid(~Gender) 
+```
+
+
+
+
